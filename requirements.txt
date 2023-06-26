@@ -1,0 +1,6 @@
+ipykernel
+black
+numpy
+pandas
+matplotlib
+scipy
