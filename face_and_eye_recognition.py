@@ -5,7 +5,7 @@ import numpy as np
 
 # VideoCaptureのインスタンスを作成する。
 # 引数でカメラを選べれる。
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 
 if cap.isOpened() is False:
     print("can not open camera")
@@ -17,14 +17,6 @@ cascade = cv2.CascadeClassifier('opencv/data/haarcascades/haarcascade_frontalfac
 profile_face_cascade = cv2.CascadeClassifier('opencv/data/haarcascades/haarcascade_profileface.xml')
 eye_cascade = cv2.CascadeClassifier('opencv/data/haarcascades/haarcascade_eye_tree_eyeglasses.xml')
 
-def mosaic(src, ratio=0.1):
-    small = cv2.resize(src, None, fx=ratio, fy=ratio, interpolation=cv2.INTER_NEAREST)
-    return cv2.resize(small, src.shape[:2][::-1], interpolation=cv2.INTER_NEAREST)
-
-def mosaic_area(src, x, y, width, height, ratio=0.1):
-    dst = src.copy()
-    dst[y:y + height, x:x + width] = mosaic(dst[y:y + height, x:x + width], ratio)
-    return dst
 def convert_x_to_angle(x, frame_width):
     return (x - frame_width / 2) / (frame_width / 2) * 180
 
@@ -53,6 +45,39 @@ while True:
         minNeighbors=3,
         minSize=(100, 100)
     )
+    #... (前部のコード)
+
+    # Check that both have detected faces, if not make them the correct shape
+    if len(frontal_facerect) == 0:
+        frontal_facerect = np.empty(shape=(0,4))
+    if len(profile_facerect) == 0:
+        profile_facerect = np.empty(shape=(0,4))
+
+    # Combine the frontal and profile face rectangles into one list
+    all_faces = np.concatenate((frontal_facerect, profile_facerect))
+
+    # If no faces were found, skip to the next frame
+    if len(all_faces) == 0:
+        continue
+
+    # For each detected face
+    for rect in all_faces:
+        x, y, w, h = map(int, rect)  # Add this line to convert the values to integers
+
+        center_x = x + w // 2
+        center_y = y + h // 2
+
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+        cv2.circle(frame, (center_x, center_y), 5, (0, 0, 255), -1)
+
+        angle = convert_x_to_angle(center_x, frame.shape[1])
+        cv2.putText(frame, f'Angle: {angle:.2f}', (center_x + 10, center_y + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+    cv2.imshow('frame', frame)
+
+#... (後部のコード)
+
+    '''
     # Choose the face with the larger area if both are detected
     if len(frontal_facerect) != 0 and len(profile_facerect) != 0:
         if frontal_facerect[0][2] * frontal_facerect[0][3] > profile_facerect[0][2] * profile_facerect[0][3]:
@@ -80,7 +105,7 @@ while True:
             cv2.putText(frame, f'Angle: {angle:.2f}', (center_x + 10, center_y + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
     cv2.imshow('frame', frame)
-
+'''
     k = cv2.waitKey(1)
     if k == 27:
         break

@@ -2,7 +2,7 @@ import cv2
 
 # カメラインデックスを指定。通常、0は内蔵カメラ、1以降が他のカメラ
 # OBSの仮想カメラなら1や2等を試す
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 
 while(True):
     # フレームを取得
