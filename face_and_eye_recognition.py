@@ -1,5 +1,6 @@
 import cv2
 import sys
+import time
 import numpy as np
 
 
@@ -10,6 +11,12 @@ cap = cv2.VideoCapture(0)
 if cap.isOpened() is False:
     print("can not open camera")
     sys.exit()
+
+# トラッカーとIDを初期化
+tracker_dict = dict()
+face_id_counter = 1
+# Create an empty set for face IDs
+IDs_set = set()
 
 # 評価器を読み込み
 # https://github.com/opencv/opencv/tree/master/data/haarcascades
@@ -56,56 +63,50 @@ while True:
     # Combine the frontal and profile face rectangles into one list
     all_faces = np.concatenate((frontal_facerect, profile_facerect))
 
-    # If no faces were found, skip to the next frame
-    if len(all_faces) == 0:
-        continue
-
-    # For each detected face
     for rect in all_faces:
-        x, y, w, h = map(int, rect)  # Add this line to convert the values to integers
+        x, y, w, h = map(int, rect)
+        # Checking if this face is already being tracked
+        face_tracked = False
+        for face_id, tracker in tracker_dict.items():
+            success, bbox = tracker.update(frame)
+            if success:
+                (xt, yt, wt, ht) = [int(v) for v in bbox]
+                # if the detected face and tracked face overlap significantly, they are the same face
+                if (x <= xt + wt/2 <= x + w) and (y <= yt + ht/2 <= y + h):
+                    face_tracked = True
+                    IDs_set.discard(face_id)
+                    break
 
-        center_x = x + w // 2
-        center_y = y + h // 2
+        # If the face is not being tracked, create a new tracker
+        if not face_tracked:
+            tracker = cv2.TrackerCSRT_create()
+            tracker.init(frame, (x, y, w, h))
+            tracker_dict[face_id_counter] = tracker
+            face_id_counter += 1
 
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-        cv2.circle(frame, (center_x, center_y), 5, (0, 0, 255), -1)
+    # ※HACK: 顔が消えたらIDを削除してしまっているが、一定の秒数残す処理を行うこともできる
+    for face_id in IDs_set:
+       del tracker_dict[face_id]
+    
+    IDs_set = set(tracker_dict.keys())  # 更新
 
-        angle = convert_x_to_angle(center_x, frame.shape[1])
-        cv2.putText(frame, f'Angle: {angle:.2f}', (center_x + 10, center_y + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+    
 
-    cv2.imshow('frame', frame)
-
-#... (後部のコード)
-
-    '''
-    # Choose the face with the larger area if both are detected
-    if len(frontal_facerect) != 0 and len(profile_facerect) != 0:
-        if frontal_facerect[0][2] * frontal_facerect[0][3] > profile_facerect[0][2] * profile_facerect[0][3]:
-            facerect = frontal_facerect
-        else:
-            facerect = profile_facerect
-    elif len(frontal_facerect) != 0:
-        facerect = frontal_facerect
-    elif len(profile_facerect) != 0:
-        facerect = profile_facerect
-    else:
-        facerect = []
-    # handle both frontal and profile faces separately
-    #for facerect in [facerect, profile_facerect]:
-    if len(facerect) != 0:
-        for x, y, w, h in facerect:
+    for face_id, tracker in tracker_dict.items():
+        ok, bbox = tracker.update(frame)
+        if ok:
+            (x, y, w, h) = [int(v) for v in bbox]
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
 
             center_x = x + w // 2
             center_y = y + h // 2
-
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
             cv2.circle(frame, (center_x, center_y), 5, (0, 0, 255), -1)
 
             angle = convert_x_to_angle(center_x, frame.shape[1])
-            cv2.putText(frame, f'Angle: {angle:.2f}', (center_x + 10, center_y + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+            cv2.putText(frame, f'ID: {face_id}, Angle: {angle:.2f}', (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), 2)
 
     cv2.imshow('frame', frame)
-'''
+
     k = cv2.waitKey(1)
     if k == 27:
         break
